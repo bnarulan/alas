@@ -1,0 +1,5 @@
+aiohttp>=3.12,<4
+# The stream completion check uses the byte count set at turn.end in this release.
+edge-tts==7.3.1
+imageio-ffmpeg==0.8.1
+filelock>=3.25,<4
