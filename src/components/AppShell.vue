@@ -60,7 +60,6 @@ function reset() {
         </RouterLink>
       </nav>
       <div class="sidebar-bottom">
-        <span class="sidebar-demo"><span></span>{{ store.t('Демо режимі', 'Деморежим') }}</span>
         <button type="button" class="side-action" @click="reset"><RotateCcw :size="17" />{{ store.t('Деректерді ысыру', 'Сбросить данные') }}</button>
         <button type="button" class="side-action" @click="logout"><LogOut :size="17" />{{ store.t('Шығу / рөлді ауыстыру', 'Выйти / сменить роль') }}</button>
       </div>
