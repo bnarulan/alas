@@ -24,7 +24,7 @@ test('updates the existing lesson and persists both Kazakh exercise results', as
   })
 
   await page.reload()
-  await expect(page.getByRole('heading', { name: /Бақыт/ })).toBeVisible()
+  await expect(page.getByRole('heading', { name: /^Сәлем,/ })).toBeVisible()
   expect(await page.evaluate(() => {
     const data = JSON.parse(localStorage.getItem('alas.learning.v1')!)
     return {

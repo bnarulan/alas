@@ -5,7 +5,7 @@ import { pronunciationLesson } from '../../src/data/seed'
 async function openLesson(page: Page) {
   await page.goto('/')
   await page.getByRole('button', { name: /Оқушы ретінде кіру/ }).click()
-  await expect(page.getByRole('heading', { name: /Бақыт/ })).toBeVisible()
+  await expect(page.getByRole('heading', { name: /^Сәлем,/ })).toBeVisible()
   await page.evaluate(lesson => {
     const key = 'alas.learning.v1'
     const data = JSON.parse(localStorage.getItem(key)!)
@@ -64,6 +64,27 @@ test('plays both popup languages, prevents duplicate clicks and reuses the serve
   if (isMobile) await card.getByRole('button', { name: 'Жабу' }).tap()
   else await page.keyboard.press('Escape')
   await expect(card).toHaveCount(0)
+})
+
+test('replays production audio from the browser session cache', async ({ page }) => {
+  await openLesson(page)
+  let requests = 0
+  await page.route('**/api/tts', async route => {
+    requests++
+    const response = await route.fetch()
+    await route.fulfill({ response, headers: { ...response.headers(), 'x-alas-playback-cache': 'session-v1' } })
+  })
+  await page.getByRole('button', { name: 'Білім', exact: true }).click()
+  const card = popup(page)
+  await speakKk(card).click()
+  await expect(card.locator('.tts-button').first()).toHaveAttribute('data-state', 'playing')
+  await card.getByRole('button', { name: /Дыбыстауды тоқтату.*Қазақша/ }).click()
+  await speakKk(card).click()
+  await expect(card.locator('.tts-button').first()).toHaveAttribute('data-state', 'playing')
+  expect(requests).toBe(1)
+  await speakRu(card).click()
+  await expect(card.locator('.tts-button').last()).toHaveAttribute('data-state', 'playing')
+  expect(requests).toBe(2)
 })
 
 test('speaks selected sentences and paragraphs with persisted speed and voice', async ({ page }) => {

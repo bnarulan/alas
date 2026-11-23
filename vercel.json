@@ -1,0 +1,14 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "fluid": true,
+  "functions": {
+    "api/tts.py": {
+      "maxDuration": 300,
+      "includeFiles": "backend/**",
+      "excludeFiles": "{.venv/**,.tts-cache/**,node_modules/**,dist/**,tests/**,test-results/**,public/**,assets/**,src/**,**/__pycache__/**}"
+    }
+  }
+}

@@ -344,7 +344,7 @@ progress::-moz-progress-bar { background: #149383; border-radius: 20px; }
 .exercise-card h3 { font-size: 1.12rem; line-height: 1.45; margin-bottom: 12px; }
 .exercise-options { display: grid; gap: 6px; }
 .exercise-instruction { margin-bottom: 12px; color: var(--muted); }
-.exercise-blanks { display: grid; gap: 10px; padding-inline-start: 1.5em; list-style: decimal; line-height: 1.8; }
+.exercise-blanks { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding-inline-start: 1.5em; list-style: decimal; line-height: 1.8; }
 .exercise-blanks input { width: 36ch; max-width: 100%; padding: 5px 8px; margin-block: 3px; border: 1px solid var(--border); border-radius: 8px; background: #f7fbfa; }
 .lesson-answer { border-radius: 9px; padding: 9px; }
 .lesson-answer-correct { background: #eaf7f3; }

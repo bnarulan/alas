@@ -56,6 +56,7 @@ class Settings:
     passage_timeout: int = 240
     retries: int = 1
     retry_backoff_ms: int = 350
+    max_audio_bytes: int = MAX_AUDIO_BYTES
 
     @classmethod
     def from_env(cls):
@@ -142,6 +143,10 @@ class CompressedSpeech(ProviderFailure):
 
 
 class Busy(Exception):
+    pass
+
+
+class AudioTooLarge(ProviderFailure):
     pass
 
 
@@ -330,16 +335,16 @@ class AudioCache:
 
 
 class SpeechService:
-    def __init__(self, settings: Settings, provider: SpeechProvider):
+    def __init__(self, settings: Settings, provider: SpeechProvider, *, disk_cache: bool = True):
         self.settings = settings
         self.provider = provider
-        self.cache = AudioCache(settings)
+        self.cache = AudioCache(settings) if disk_cache else None
         self.slots = asyncio.Semaphore(settings.concurrency)
         self.jobs: dict[str, asyncio.Task[tuple[bytes, bool]]] = {}
 
     async def get(self, phrase: Phrase) -> tuple[bytes, bool]:
         key = phrase.key()
-        cached = await asyncio.to_thread(self.cache.lookup, key)
+        cached = await asyncio.to_thread(self.cache.lookup, key) if self.cache else None
         if cached is not None:
             return cached, True
         chunks = split_passage(phrase.text)
@@ -360,6 +365,9 @@ class SpeechService:
             task.exception()
 
     async def _build(self, key: str, phrase: Phrase, chunks: list[str], timeout: int) -> tuple[bytes, bool]:
+        if self.cache is None:
+            async with asyncio.timeout(timeout):
+                return await self._synthesize_passage(key, phrase, chunks), False
         try:
             async with self.cache.lock(key, timeout):
                 async with asyncio.timeout(timeout):
@@ -386,8 +394,8 @@ class SpeechService:
                 profile = info.profile
                 frames += info.frames
                 audio_bytes += info.end - info.start
-                if audio_bytes > MAX_AUDIO_BYTES:
-                    raise ProviderFailure("complete passage audio exceeds the audio limit")
+                if audio_bytes > self.settings.max_audio_bytes:
+                    raise AudioTooLarge("complete passage audio exceeds the audio limit")
                 parts.append(audio[info.start:info.end])
 
         # Edge emits independent CBR MPEG frames. Strip per-clip tags and join only

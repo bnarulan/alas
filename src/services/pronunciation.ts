@@ -54,10 +54,14 @@ interface Session {
   owner: symbol
   controller: AbortController
   url?: string
+  clipKey?: string
 }
 
 let session: Session | undefined
 let player: HTMLAudioElement | undefined
+const sessionClips = new Map<string, Blob>()
+const sessionCacheBytes = 16 * 1024 * 1024
+let cachedBytes = 0
 const silentWav = 'data:audio/wav;base64,UklGRiYAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQIAAAAAAA=='
 
 class SpeechError extends Error {
@@ -97,7 +101,30 @@ function fail(current: Session, failure: Failure) {
   playback.value = { owner: current.owner, phase: 'error', failure }
 }
 
+function evictClip(key: string) {
+  const existing = sessionClips.get(key)
+  if (existing) {
+    cachedBytes -= existing.size
+    sessionClips.delete(key)
+  }
+}
+
+function rememberClip(key: string, clip: Blob) {
+  evictClip(key)
+  sessionClips.set(key, clip)
+  cachedBytes += clip.size
+  while (cachedBytes > sessionCacheBytes || sessionClips.size > 64) {
+    evictClip(sessionClips.keys().next().value!)
+  }
+}
+
 async function fetchClip(request: SpeechRequest, signal: AbortSignal) {
+  const key = JSON.stringify([request.text.normalize('NFC').trim(), request.language, request.voice, request.speed])
+  const cached = sessionClips.get(key)
+  if (cached) {
+    rememberClip(key, cached)
+    return { clip: cached, key }
+  }
   const response = await fetch('/api/tts', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -108,6 +135,7 @@ async function fetchClip(request: SpeechRequest, signal: AbortSignal) {
     const payload = await response.json().catch(() => null)
     if (response.status === 429) throw new SpeechError('rate_limited')
     if (response.status === 504) throw new SpeechError('timeout')
+    if (response.status === 413) throw new SpeechError('text_too_long')
     switch (payload?.error?.code) {
       case 'invalid_voice': throw new SpeechError('invalid_voice')
       case 'provider_network_error': throw new SpeechError('provider_network_error')
@@ -121,7 +149,8 @@ async function fetchClip(request: SpeechRequest, signal: AbortSignal) {
   if (response.headers.get('Content-Type')?.split(';')[0] !== 'audio/mpeg') throw new SpeechError('unavailable')
   const clip = await response.blob()
   if (!clip.size) throw new SpeechError('unavailable')
-  return clip
+  if (response.headers.get('X-Alas-Playback-Cache') === 'session-v1') rememberClip(key, clip)
+  return { clip, key }
 }
 
 async function playPrepared(current: Session) {
@@ -135,6 +164,7 @@ async function playPrepared(current: Session) {
     if (error instanceof DOMException && error.name === 'NotAllowedError') {
       playback.value = { owner: current.owner, phase: 'ready' }
     } else {
+      if (current.clipKey) evictClip(current.clipKey)
       fail(current, 'unavailable')
     }
   } finally {
@@ -146,11 +176,16 @@ async function prepareSpeech(current: Session, request: SpeechRequest) {
   playback.value = { owner: current.owner, phase: 'loading' }
   const timeout = window.setTimeout(() => fail(current, 'timeout'), 310_000)
   try {
-    const clip = await fetchClip(request, current.controller.signal)
+    const { clip, key } = await fetchClip(request, current.controller.signal)
     if (session !== current) return
     const audio = audioElement()
     audio.onended = () => { if (session === current && audio.ended) stopSpeech(current.owner) }
-    audio.onerror = () => { if (audio.error) fail(current, 'unavailable') }
+    audio.onerror = () => {
+      if (session !== current || !audio.error) return
+      evictClip(key)
+      fail(current, 'unavailable')
+    }
+    current.clipKey = key
     current.url = URL.createObjectURL(clip)
     audio.src = current.url
     void playPrepared(current)

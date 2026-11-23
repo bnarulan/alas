@@ -506,7 +506,7 @@ class ApiTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_api_rate_limit(self):
         client = await self.client(replace(self.settings, requests_per_minute=1))
-        with patch("backend.app.clock", return_value=65):
+        with patch("backend.http_tts.clock", return_value=65):
             self.assertEqual((await self.post(client)).status, 200)
             limited = await self.post(client)
         self.assertEqual(limited.status, 429)
@@ -514,10 +514,10 @@ class ApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await limited.json())["error"]["code"], "rate_limited")
 
     def test_rate_limiter_counts_a_peer_and_resets(self):
-        from backend.app import RateLimiter
+        from backend.http_tts import RateLimiter
 
         limiter = RateLimiter(1)
-        with patch("backend.app.clock", return_value=65) as tick:
+        with patch("backend.http_tts.clock", return_value=65) as tick:
             self.assertIsNone(limiter.retry_after("peer"))
             self.assertEqual(limiter.retry_after("peer"), 55)
             self.assertIsNone(limiter.retry_after("another peer"))

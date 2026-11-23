@@ -16,7 +16,7 @@ async function openPractice(page: Page) {
 async function openExercises(page: Page, exercises?: Exercise[]) {
   await page.goto('/')
   await page.getByRole('button', { name: /Оқушы ретінде кіру/ }).click()
-  await expect(page.getByRole('heading', { name: /Бақыт/ })).toBeVisible()
+  await expect(page.getByRole('heading', { name: /^Сәлем,/ })).toBeVisible()
   if (exercises) {
     await page.evaluate(items => {
       const key = 'alas.learning.v1'
@@ -66,7 +66,11 @@ test('translates the formal-style exercise and opens an option word separately f
   await expect(card.locator('.feedback-summary')).toContainText('3 / 3')
   await translate(card).click()
   await expect(card.getByText('Официально-деловой стиль. Выражает вежливую официальную просьбу.')).toBeVisible()
-  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize()!.width)
+  const { clientWidth, scrollWidth } = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }))
+  expect(scrollWidth).toBeLessThanOrEqual(clientWidth)
   await page.reload()
   await expect(card.getByRole('button', { name: 'жиналысқа', exact: true })).toHaveClass(/word-saved/)
   await expect(card.locator('.feedback-summary')).toContainText('3 / 3')
